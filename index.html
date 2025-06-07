@@ -54,7 +54,7 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            font-size: 1.8em;
+            font-size: 2.2em; /* Size Increased */
             cursor: pointer;
             border: none;
             background: none;
@@ -77,24 +77,33 @@
         .controls {
             display: flex;
             justify-content: center;
+            align-items: center;
             gap: 1em;
             flex-wrap: wrap;
         }
-        button {
+        .controls button {
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 1em;
+            padding: 14px 28px; /* Size Increased */
+            border-radius: 8px; /* Slightly more rounded */
+            font-size: 1.1em; /* Size Increased */
+            font-weight: bold;
             cursor: pointer;
             transition: background-color 0.2s, opacity 0.2s;
         }
-        button:hover {
+        .controls button:hover:not(:disabled) {
             background-color: #0056b3;
         }
         #show-answer-btn { background-color: #28a745; }
-        #show-answer-btn:hover { background-color: #218838; }
+        #show-answer-btn:hover:not(:disabled) { background-color: #218838; }
+        #prev-question-btn { background-color: #6c757d; }
+        #prev-question-btn:hover:not(:disabled) { background-color: #5a6268; }
+        .controls button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
         #round-complete-display {
             display: none; /* Initially hidden */
         }
@@ -119,6 +128,7 @@
             <div id="answer-display"></div>
         </div>
         <div class="controls">
+            <button id="prev-question-btn">戻る</button>
             <button id="show-answer-btn">答えを見る</button>
             <button id="next-question-btn">次の問題へ</button>
         </div>
@@ -241,6 +251,7 @@
         answerDisplay: document.getElementById('answer-display'),
         showAnswerBtn: document.getElementById('show-answer-btn'),
         nextQuestionBtn: document.getElementById('next-question-btn'),
+        prevQuestionBtn: document.getElementById('prev-question-btn'),
         reviewBtn: document.getElementById('review-btn'),
         modeRadios: document.querySelectorAll('input[name="mode"]'),
         progressDisplay: document.getElementById('progress-display'),
@@ -260,7 +271,6 @@
                 'review': null
             }
         },
-        currentMode: 'eng-to-jpn', // The mode currently being displayed
     };
 
     // --- Utility: Shuffle Array ---
@@ -273,13 +283,13 @@
 
     // --- LocalStorage Persistence ---
     function saveState() {
-        localStorage.setItem('wordAppSession_v7', JSON.stringify(appState.session));
-        localStorage.setItem('wordReviewList_v7', JSON.stringify(appState.reviewList));
+        localStorage.setItem('wordAppSession_v8', JSON.stringify(appState.session));
+        localStorage.setItem('wordReviewList_v8', JSON.stringify(appState.reviewList));
     }
 
     function loadState() {
-        const storedSession = localStorage.getItem('wordAppSession_v7');
-        const storedReviewList = localStorage.getItem('wordReviewList_v7');
+        const storedSession = localStorage.getItem('wordAppSession_v8');
+        const storedReviewList = localStorage.getItem('wordReviewList_v8');
         
         if (storedReviewList) {
             appState.reviewList = JSON.parse(storedReviewList);
@@ -287,18 +297,16 @@
         
         if (storedSession) {
             appState.session = JSON.parse(storedSession);
-            return true; // Session found
+            return true;
         }
-        return false; // No session found
+        return false;
     }
     
     // --- Core Application Flow ---
     function switchMode(newMode) {
-        appState.currentMode = newMode;
         appState.session.lastActiveMode = newMode;
         document.querySelector(`input[name="mode"][value="${newMode}"]`).checked = true;
         
-        // If switching to review mode, and its session is invalid (stale), reset it.
         if (newMode === 'review') {
             const sessionForReview = appState.session.sessions.review;
             if (sessionForReview && sessionForReview.reviewListState !== JSON.stringify(appState.reviewList)) {
@@ -308,10 +316,9 @@
 
         if (!appState.session.sessions[newMode]) {
             buildNewRound(newMode);
-        } else {
-            displayCard();
         }
 
+        displayCard();
         mainContent.style.display = 'block';
         roundCompleteDisplay.style.display = 'none';
         saveState();
@@ -328,43 +335,40 @@
         shuffleArray(deckSource);
 
         appState.session.sessions[mode] = {
-            deck: deckSource,
-            wordMasterIndex: -1,
-            progress: 0,
+            shuffledDeck: deckSource,
+            currentIndex: 0,
             total: deckSource.length,
             reviewListState: (mode === 'review') ? JSON.stringify(appState.reviewList) : null
         };
         
-        advanceToNextQuestion(mode);
-    }
-    
-    function advanceToNextQuestion(mode) {
-        const currentSession = appState.session.sessions[mode];
-        
-        if (!currentSession || currentSession.deck.length === 0) {
-            if (currentSession && currentSession.progress > 0) {
-                handleRoundComplete(mode);
-            } else {
-                displayCard();
-            }
-            return;
-        }
-
-        currentSession.progress++;
-        const nextItemIndex = currentSession.deck.pop();
-
-        if (mode === 'review') {
-            const reviewItem = appState.reviewList[nextItemIndex];
-            currentSession.wordMasterIndex = reviewItem.wordIndex;
-        } else {
-            currentSession.wordMasterIndex = nextItemIndex;
-        }
-        
         displayCard();
     }
+    
+    function goToNextQuestion() {
+        const session = appState.session.sessions[appState.session.lastActiveMode];
+        if (!session) return;
+        
+        if (session.currentIndex >= session.total - 1) {
+            handleRoundComplete();
+        } else {
+            session.currentIndex++;
+            displayCard();
+            saveState();
+        }
+    }
 
-    function handleRoundComplete(mode) {
-        appState.session.sessions[mode] = null; // Clear the completed session
+    function goToPrevQuestion() {
+        const session = appState.session.sessions[appState.session.lastActiveMode];
+        if (!session || session.currentIndex <= 0) return;
+        
+        session.currentIndex--;
+        displayCard();
+        saveState();
+    }
+
+    function handleRoundComplete() {
+        const mode = appState.session.lastActiveMode;
+        appState.session.sessions[mode] = null;
         saveState();
         mainContent.style.display = 'none';
         roundCompleteDisplay.style.display = 'block';
@@ -374,62 +378,80 @@
     // --- UI Rendering ---
     function displayCard() {
         allDOMElements.answerDisplay.style.display = 'none';
-        const currentSession = appState.session.sessions[appState.currentMode];
+        const session = appState.session.sessions[appState.session.lastActiveMode];
         
-        if (!currentSession || currentSession.total === 0) {
-            allDOMElements.progressDisplay.textContent = (appState.currentMode === 'review') ? '再確認リストは空です' : '';
-            allDOMElements.questionDisplay.textContent = (appState.currentMode === 'review') ? '★ボタンで単語を追加してください' : 'リストに単語がありません。';
-            currentSession ? currentSession.wordMasterIndex = -1 : null;
+        if (!session || session.total === 0) {
+            allDOMElements.progressDisplay.textContent = (appState.session.lastActiveMode === 'review') ? '再確認リストは空です' : '';
+            allDOMElements.questionDisplay.textContent = (appState.session.lastActiveMode === 'review') ? '★ボタンで単語を追加してください' : 'リストに単語がありません。';
+            allDOMElements.prevQuestionBtn.disabled = true;
+            allDOMElements.nextQuestionBtn.disabled = true;
+            allDOMElements.showAnswerBtn.disabled = true;
             updateReviewButtonUI();
             return;
         }
         
-        allDOMElements.progressDisplay.textContent = `${currentSession.progress} / ${currentSession.total}`;
+        allDOMElements.showAnswerBtn.disabled = false;
+        allDOMElements.progressDisplay.textContent = `${session.currentIndex + 1} / ${session.total}`;
         
-        const wordIndex = currentSession.wordMasterIndex;
-        let direction = appState.currentMode;
-
+        const deckIndex = session.shuffledDeck[session.currentIndex];
+        const wordMasterIndex = (appState.session.lastActiveMode === 'review') ? appState.reviewList[deckIndex].wordIndex : deckIndex;
+        
+        let direction = appState.session.lastActiveMode;
         if (direction === 'review') {
-            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
-            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn'; // Fallback
+            const reviewItem = appState.reviewList[deckIndex];
+            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn';
         }
         
-        allDOMElements.questionDisplay.textContent = direction === 'eng-to-jpn' ? words[wordIndex].eng : words[wordIndex].jpn;
+        allDOMElements.questionDisplay.textContent = direction === 'eng-to-jpn' ? words[wordMasterIndex].eng : words[wordMasterIndex].jpn;
+
+        // Update button states
+        allDOMElements.prevQuestionBtn.disabled = (session.currentIndex <= 0);
+        allDOMElements.nextQuestionBtn.disabled = false;
+        if (session.currentIndex >= session.total - 1) {
+            allDOMElements.nextQuestionBtn.textContent = 'ラウンド終了';
+        } else {
+            allDOMElements.nextQuestionBtn.textContent = '次の問題へ';
+        }
+        
         updateReviewButtonUI();
     }
     
     function showAnswer() {
-        const currentSession = appState.session.sessions[appState.currentMode];
-        if (!currentSession || currentSession.wordMasterIndex === -1) return;
+        const session = appState.session.sessions[appState.session.lastActiveMode];
+        if (!session || session.currentIndex < 0) return;
 
-        const wordIndex = currentSession.wordMasterIndex;
-        let direction = appState.currentMode;
+        const deckIndex = session.shuffledDeck[session.currentIndex];
+        const wordMasterIndex = (appState.session.lastActiveMode === 'review') ? appState.reviewList[deckIndex].wordIndex : deckIndex;
+
+        let direction = appState.session.lastActiveMode;
         if (direction === 'review') {
-            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
-            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn'; // Fallback
+            const reviewItem = appState.reviewList[deckIndex];
+            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn';
         }
         
-        allDOMElements.answerDisplay.textContent = direction === 'eng-to-jpn' ? words[wordIndex].jpn : words[wordIndex].eng;
+        allDOMElements.answerDisplay.textContent = direction === 'eng-to-jpn' ? words[wordMasterIndex].jpn : words[wordMasterIndex].eng;
         allDOMElements.answerDisplay.style.display = 'block';
     }
     
     function updateReviewButtonUI() {
-        const currentSession = appState.session.sessions[appState.currentMode];
-        if (!currentSession || currentSession.wordMasterIndex === -1) {
+        const session = appState.session.sessions[appState.session.lastActiveMode];
+        if (!session || session.currentIndex < 0) {
             allDOMElements.reviewBtn.style.display = 'none';
             return;
         }
         allDOMElements.reviewBtn.style.display = 'block';
         
-        const wordIndex = currentSession.wordMasterIndex;
-        let direction = appState.currentMode;
+        const deckIndex = session.shuffledDeck[session.currentIndex];
+        const wordMasterIndex = (appState.session.lastActiveMode === 'review') ? appState.reviewList[deckIndex].wordIndex : deckIndex;
+
+        let direction = appState.session.lastActiveMode;
         if (direction === 'review') {
-             const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+             const reviewItem = appState.reviewList[deckIndex];
              if(reviewItem) direction = reviewItem.direction;
         }
 
         const isInList = appState.reviewList.some(
-            item => item.wordIndex === wordIndex && item.direction === direction
+            item => item.wordIndex === wordMasterIndex && item.direction === direction
         );
 
         allDOMElements.reviewBtn.textContent = isInList ? '★' : '☆';
@@ -437,25 +459,27 @@
     }
     
     function toggleReviewStatus() {
-        const currentSession = appState.session.sessions[appState.currentMode];
-        if (!currentSession || currentSession.wordMasterIndex === -1) return;
+        const session = appState.session.sessions[appState.session.lastActiveMode];
+        if (!session || session.currentIndex < 0) return;
 
-        const wordIndex = currentSession.wordMasterIndex;
-        let direction = appState.currentMode;
+        const deckIndex = session.shuffledDeck[session.currentIndex];
+        const wordMasterIndex = (appState.session.lastActiveMode === 'review') ? appState.reviewList[deckIndex].wordIndex : deckIndex;
+        
+        let direction = appState.session.lastActiveMode;
         if (direction === 'review') {
-            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+            const reviewItem = appState.reviewList[deckIndex];
             if(reviewItem) direction = reviewItem.direction;
         }
 
         const existingIndex = appState.reviewList.findIndex(
-            item => item.wordIndex === wordIndex && item.direction === direction
+            item => item.wordIndex === wordMasterIndex && item.direction === direction
         );
 
         if (existingIndex > -1) { // REMOVING word
             appState.reviewList.splice(existingIndex, 1);
             // Per user request, do NOT reset the review session when removing.
         } else { // ADDING word
-            appState.reviewList.push({ wordIndex: wordIndex, direction: direction });
+            appState.reviewList.push({ wordIndex: wordMasterIndex, direction: direction });
             // Invalidate the current review session to force a refresh with the new word
             if (appState.session.sessions.review) {
                 appState.session.sessions.review = null;
@@ -468,12 +492,10 @@
 
     // --- Event Listeners & Initial Load ---
     allDOMElements.showAnswerBtn.addEventListener('click', showAnswer);
-    allDOMElements.nextQuestionBtn.addEventListener('click', () => {
-        advanceToNextQuestion(appState.currentMode);
-        saveState();
-    });
+    allDOMElements.nextQuestionBtn.addEventListener('click', goToNextQuestion);
+    allDOMElements.prevQuestionBtn.addEventListener('click', goToPrevQuestion);
     allDOMElements.reviewBtn.addEventListener('click', toggleReviewStatus);
-    allDOMElements.restartBtn.addEventListener('click', () => buildNewRound(appState.currentMode));
+    allDOMElements.restartBtn.addEventListener('click', () => switchMode(appState.session.lastActiveMode));
 
     allDOMElements.modeRadios.forEach(radio => {
         radio.addEventListener('change', (event) => {
