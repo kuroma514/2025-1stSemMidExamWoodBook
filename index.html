@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>単語帳アプリ</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #333;
+        }
+        #app-container {
+            background-color: #ffffff;
+            padding: 2em;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 {
+            color: #1a1a1a;
+            margin-top: 0;
+        }
+        #mode-selector {
+            margin-bottom: 1em;
+        }
+        #progress-display {
+            font-size: 1.1em;
+            color: #6c757d;
+            margin-bottom: 1em;
+            height: 1.5em;
+        }
+        .card {
+            background-color: #fafafa;
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            padding: 1.5em;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5em;
+            position: relative;
+        }
+        #review-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.8em;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0;
+            line-height: 1;
+        }
+        .in-review-list { color: #ffc107; }
+        .not-in-review-list { color: #ccc; }
+        #question-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 1em;
+            padding: 0 2em;
+        }
+        #answer-display {
+            font-size: 1.2em;
+            color: #007bff;
+            display: none;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1em;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #show-answer-btn { background-color: #28a745; }
+        #show-answer-btn:hover { background-color: #218838; }
+        #round-complete-display {
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <h1>単語帳</h1>
+    <div id="mode-selector">
+        <label><input type="radio" name="mode" value="eng-to-jpn"> 英→日</label>
+        <label><input type="radio" name="mode" value="jpn-to-eng"> 日→英</label>
+        <label><input type="radio" name="mode" value="review"> 再確認リスト</label>
+    </div>
+
+    <div id="progress-display"></div>
+
+    <div id="main-content">
+        <div class="card">
+            <button id="review-btn" title="再確認リストに追加/削除">☆</button>
+            <div id="question-display"></div>
+            <div id="answer-display"></div>
+        </div>
+        <div class="controls">
+            <button id="show-answer-btn">答えを見る</button>
+            <button id="next-question-btn">次の問題へ</button>
+        </div>
+    </div>
+    
+    <div id="round-complete-display">
+        <h2>1周完了しました！</h2>
+        <button id="restart-btn">もう一度挑戦する</button>
+    </div>
+</div>
+
+<script>
+    const words = [
+        { eng: "if S were to do", jpn: "【句】もしSが〜するとすれば【仮定法未来】" },
+        { eng: "drawing", jpn: "【名】絵" },
+        { eng: "medium-colored skin", jpn: "【名】中くらいの色の肌" },
+        { eng: "dark eyes", jpn: "【名】黒い目" },
+        { eng: "definitely", jpn: "【副】明確に、はっきりと、絶対に" },
+        { eng: "figure", jpn: "【名】人, 姿, 図" },
+        { eng: "though", jpn: "【接】〜だけれども" },
+        { eng: "actually", jpn: "【副】実は、" },
+        { eng: "a number of ~", jpn: "【熟】いくつかの〜、多数の〜" },
+        { eng: "look like A", jpn: "【熟】Aのように見える" },
+        { eng: "all the way", jpn: "【副】ずっと、はるばる" },
+        { eng: "Cameroon", jpn: "【名】カメルーン" },
+        { eng: "biologist", jpn: "【名】生物学者" },
+        { eng: "research project", jpn: "【名】研究計画" },
+        { eng: "former marriage", jpn: "【名】前の結婚相手" },
+        { eng: "was brought to", jpn: "【熟】〜へ連れてこられた" },
+        { eng: "through cartoons", jpn: "【副】漫画をとおして" },
+        { eng: "communication tool", jpn: "【名】コミュニケーションの道具" },
+        { eng: "describe", jpn: "【動】描写する、特徴を述べる" },
+        { eng: "unique experience", jpn: "【名】独特の経験" },
+        { eng: "profession", jpn: "【名】職業" },
+        { eng: "naturally", jpn: "【副】自然に、当然" },
+        { eng: "unlike ~", jpn: "【前】〜と違って" },
+        { eng: "ordinary", jpn: "【形】普通の、並の" },
+        { eng: "Cameroonian", jpn: "【名】カメルーン人の" },
+        { eng: "reply to A", jpn: "【熟】Aに返事する" },
+        { eng: "neighbor", jpn: "【名】近所の人たち" },
+        { eng: "would not have survived", jpn: "【動】生き残らなかっただろう【仮定法過去完了】" },
+        { eng: "despite ~", jpn: "【前】〜にもかかわらず" },
+        { eng: "be blessed with ~", jpn: "【熟】〜に恵まれている" },
+        { eng: "countless", jpn: "【形】無数の" },
+        { eng: "avoid ~ing", jpn: "【熟】〜するのを避ける" },
+        { eng: "the focus of public attention", jpn: "【熟】世間の注目の的" },
+        { eng: "nightmare", jpn: "【名】悪夢" },
+        { eng: "be obsessed with A", jpn: "【熟】Aに取りつかれている、Aのことで頭がいっぱい" },
+        { eng: "myth", jpn: "【名】神話" },
+        { eng: "by far the 最上級", jpn: "【熟】ずば抜けて最も〜" },
+        { eng: "human race", jpn: "【名】人類" },
+        { eng: "unfortunately", jpn: "【副】残念ながら、不運にも" },
+        { eng: "Not only A but also B", jpn: "【熟】AだけでなくBも" },
+        { eng: "physical features", jpn: "【名】身体的特徴" },
+        { eng: "draw the attention of ~", jpn: "【熟】〜の注目を引く" },
+        { eng: "the rest of A", jpn: "【名】Aの残り" },
+        { eng: "beautifully arranged", jpn: "【副句】美しく配置・盛り付けられた" },
+        { eng: "with chopsticks", jpn: "【句】箸を使って" },
+        { eng: "dip A into B", jpn: "【熟】AをBに浸す、浸す" },
+        { eng: "steamed", jpn: "【過分】蒸した" },
+        { eng: "nut soup", jpn: "【名】ナッツのスープ" },
+        { eng: "be terribly annoyed by A", jpn: "【熟】Aのことでひどくイライラする" },
+        { eng: "appreciate", jpn: "【動】をありがたく思う、を正しく評価する" },
+        { eng: "be surrounded by ~", jpn: "【熟】〜に囲まれる" },
+        { eng: "diversity", jpn: "【名】多様性" },
+        { eng: "It is not until A that B", jpn: "【構】Aになって初めてBする" },
+        { eng: "acquire a \"board\"", jpn: "【句】ボード（板）を手に入れる" },
+        { eng: "social skills", jpn: "【名】社会技術、社交術" },
+        { eng: "difference", jpn: "【名】違い" },
+        { eng: "grow up to be ~", jpn: "【熟】成長して〜になる【不定詞】" },
+        { eng: "culturally", jpn: "【副】文化的に" },
+        { eng: "anyway", jpn: "【副】とにかく、何はともあれ" },
+        { eng: "teach A to be ~", jpn: "【熟】Aに〜であれと教える" },
+        { eng: "telling me not to ~", jpn: "【句】私に〜するなと言って【分構】" },
+        { eng: "lie", jpn: "【動】うそをつく" },
+        { eng: "cause trouble for ~", jpn: "【熟】〜に迷惑をかける" },
+        { eng: "cheerful and brave", jpn: "【形】元気で勇敢な" },
+        { eng: "remarks vary", jpn: "【句】発言は様々である" },
+        { eng: "more Japanese", jpn: "【形】より日本人に" },
+        { eng: "other times", jpn: "【熟】別の機会には" },
+        { eng: "after all", jpn: "【熟】結局" },
+        { eng: "outcome", jpn: "【名】結果" },
+        { eng: "ask A to ~", jpn: "【熟】Aに〜するよう頼む" },
+        { eng: "define ~", jpn: "【動】定義する" },
+        { eng: "for a while", jpn: "【熟】しばらくの間" },
+        { eng: "consist of ~", jpn: "【熟】〜で構成される" },
+        { eng: "ancestor", jpn: "【名】先祖" },
+        { eng: "A such as B", jpn: "【熟】BなどのA" },
+        { eng: "custom", jpn: "【名】習慣、風習" },
+        { eng: "hold ceremonies", jpn: "【句】儀式を行う" },
+        { eng: "structure", jpn: "【名】建物、構造" },
+        { eng: "splendid", jpn: "【形】素晴らしい" },
+        { eng: "creation", jpn: "【名】創造物、創造" },
+        { eng: "at that time", jpn: "【熟】当時" },
+        { eng: "what was produced", jpn: "【関代節】製造されたもの" },
+        { eng: "refer to ~", jpn: "【熟】〜を指す/言及" },
+        { eng: "not A but B", jpn: "【句】AではなくB" },
+        { eng: "era", jpn: "【名】時代" },
+        { eng: "amuse ~", jpn: "【動】〜を楽しませる" },
+        { eng: "including ~", jpn: "【前】〜を含む" },
+        { eng: "European-Japanese", jpn: "【名】ヨーロッパ系日本人" },
+        { eng: "African-Japanese", jpn: "【名】アフリカ系日本人" },
+        { eng: "contribute to ~", jpn: "【熟】〜に貢献" },
+        { eng: "add A to B", jpn: "【熟】AをBに加える" },
+        { eng: "tint", jpn: "【名】色合い" },
+        { eng: "tradition", jpn: "【名】伝統" },
+        { eng: "encourage A to ~", jpn: "【熟】Aに〜するよう勧める" },
+        { eng: "be regarded as ~", jpn: "【熟】〜だと見なされる" },
+        { eng: "part of A", jpn: "【句】Aの一部" },
+        { eng: "7.6 billion-piece", jpn: "【形句】76億ピースの" },
+        { eng: "puzzle", jpn: "【名】パズル" },
+        { eng: "completely", jpn: "【副】完全に、まったく" },
+        { eng: "in color and shape", jpn: "【句】色と形において" },
+        { eng: "irreplaceable", jpn: "【形】かけがえのない" }
+    ];
+
+    // --- DOM Elements ---
+    const allDOMElements = {
+        questionDisplay: document.getElementById('question-display'),
+        answerDisplay: document.getElementById('answer-display'),
+        showAnswerBtn: document.getElementById('show-answer-btn'),
+        nextQuestionBtn: document.getElementById('next-question-btn'),
+        reviewBtn: document.getElementById('review-btn'),
+        modeRadios: document.querySelectorAll('input[name="mode"]'),
+        progressDisplay: document.getElementById('progress-display'),
+        mainContent: document.getElementById('main-content'),
+        roundCompleteDisplay: document.getElementById('round-complete-display'),
+        restartBtn: document.getElementById('restart-btn'),
+    };
+
+    // --- State Management ---
+    let appState = {
+        reviewList: [], // Master list of review items
+        session: { // Holds the progress for all modes
+            lastActiveMode: 'eng-to-jpn',
+            sessions: {
+                'eng-to-jpn': null,
+                'jpn-to-eng': null,
+                'review': null
+            }
+        },
+        currentMode: 'eng-to-jpn', // The mode currently being displayed
+    };
+
+    // --- Utility: Shuffle Array ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- LocalStorage Persistence ---
+    function saveState() {
+        localStorage.setItem('wordAppSession_v7', JSON.stringify(appState.session));
+        localStorage.setItem('wordReviewList_v7', JSON.stringify(appState.reviewList));
+    }
+
+    function loadState() {
+        const storedSession = localStorage.getItem('wordAppSession_v7');
+        const storedReviewList = localStorage.getItem('wordReviewList_v7');
+        
+        if (storedReviewList) {
+            appState.reviewList = JSON.parse(storedReviewList);
+        }
+        
+        if (storedSession) {
+            appState.session = JSON.parse(storedSession);
+            return true; // Session found
+        }
+        return false; // No session found
+    }
+    
+    // --- Core Application Flow ---
+    function switchMode(newMode) {
+        appState.currentMode = newMode;
+        appState.session.lastActiveMode = newMode;
+        document.querySelector(`input[name="mode"][value="${newMode}"]`).checked = true;
+        
+        // If switching to review mode, and its session is invalid (stale), reset it.
+        if (newMode === 'review') {
+            const sessionForReview = appState.session.sessions.review;
+            if (sessionForReview && sessionForReview.reviewListState !== JSON.stringify(appState.reviewList)) {
+                appState.session.sessions.review = null; 
+            }
+        }
+
+        if (!appState.session.sessions[newMode]) {
+            buildNewRound(newMode);
+        } else {
+            displayCard();
+        }
+
+        mainContent.style.display = 'block';
+        roundCompleteDisplay.style.display = 'none';
+        saveState();
+    }
+
+    function buildNewRound(mode) {
+        let deckSource;
+        if (mode === 'review') {
+            deckSource = appState.reviewList.map((_, index) => index);
+        } else {
+            deckSource = words.map((_, index) => index);
+        }
+
+        shuffleArray(deckSource);
+
+        appState.session.sessions[mode] = {
+            deck: deckSource,
+            wordMasterIndex: -1,
+            progress: 0,
+            total: deckSource.length,
+            reviewListState: (mode === 'review') ? JSON.stringify(appState.reviewList) : null
+        };
+        
+        advanceToNextQuestion(mode);
+    }
+    
+    function advanceToNextQuestion(mode) {
+        const currentSession = appState.session.sessions[mode];
+        
+        if (!currentSession || currentSession.deck.length === 0) {
+            if (currentSession && currentSession.progress > 0) {
+                handleRoundComplete(mode);
+            } else {
+                displayCard();
+            }
+            return;
+        }
+
+        currentSession.progress++;
+        const nextItemIndex = currentSession.deck.pop();
+
+        if (mode === 'review') {
+            const reviewItem = appState.reviewList[nextItemIndex];
+            currentSession.wordMasterIndex = reviewItem.wordIndex;
+        } else {
+            currentSession.wordMasterIndex = nextItemIndex;
+        }
+        
+        displayCard();
+    }
+
+    function handleRoundComplete(mode) {
+        appState.session.sessions[mode] = null; // Clear the completed session
+        saveState();
+        mainContent.style.display = 'none';
+        roundCompleteDisplay.style.display = 'block';
+        allDOMElements.progressDisplay.textContent = `1周完了！ お疲れ様でした。`;
+    }
+
+    // --- UI Rendering ---
+    function displayCard() {
+        allDOMElements.answerDisplay.style.display = 'none';
+        const currentSession = appState.session.sessions[appState.currentMode];
+        
+        if (!currentSession || currentSession.total === 0) {
+            allDOMElements.progressDisplay.textContent = (appState.currentMode === 'review') ? '再確認リストは空です' : '';
+            allDOMElements.questionDisplay.textContent = (appState.currentMode === 'review') ? '★ボタンで単語を追加してください' : 'リストに単語がありません。';
+            currentSession ? currentSession.wordMasterIndex = -1 : null;
+            updateReviewButtonUI();
+            return;
+        }
+        
+        allDOMElements.progressDisplay.textContent = `${currentSession.progress} / ${currentSession.total}`;
+        
+        const wordIndex = currentSession.wordMasterIndex;
+        let direction = appState.currentMode;
+
+        if (direction === 'review') {
+            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn'; // Fallback
+        }
+        
+        allDOMElements.questionDisplay.textContent = direction === 'eng-to-jpn' ? words[wordIndex].eng : words[wordIndex].jpn;
+        updateReviewButtonUI();
+    }
+    
+    function showAnswer() {
+        const currentSession = appState.session.sessions[appState.currentMode];
+        if (!currentSession || currentSession.wordMasterIndex === -1) return;
+
+        const wordIndex = currentSession.wordMasterIndex;
+        let direction = appState.currentMode;
+        if (direction === 'review') {
+            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+            direction = reviewItem ? reviewItem.direction : 'eng-to-jpn'; // Fallback
+        }
+        
+        allDOMElements.answerDisplay.textContent = direction === 'eng-to-jpn' ? words[wordIndex].jpn : words[wordIndex].eng;
+        allDOMElements.answerDisplay.style.display = 'block';
+    }
+    
+    function updateReviewButtonUI() {
+        const currentSession = appState.session.sessions[appState.currentMode];
+        if (!currentSession || currentSession.wordMasterIndex === -1) {
+            allDOMElements.reviewBtn.style.display = 'none';
+            return;
+        }
+        allDOMElements.reviewBtn.style.display = 'block';
+        
+        const wordIndex = currentSession.wordMasterIndex;
+        let direction = appState.currentMode;
+        if (direction === 'review') {
+             const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+             if(reviewItem) direction = reviewItem.direction;
+        }
+
+        const isInList = appState.reviewList.some(
+            item => item.wordIndex === wordIndex && item.direction === direction
+        );
+
+        allDOMElements.reviewBtn.textContent = isInList ? '★' : '☆';
+        allDOMElements.reviewBtn.className = isInList ? 'in-review-list' : 'not-in-review-list';
+    }
+    
+    function toggleReviewStatus() {
+        const currentSession = appState.session.sessions[appState.currentMode];
+        if (!currentSession || currentSession.wordMasterIndex === -1) return;
+
+        const wordIndex = currentSession.wordMasterIndex;
+        let direction = appState.currentMode;
+        if (direction === 'review') {
+            const reviewItem = appState.reviewList.find(item => item.wordIndex === wordIndex);
+            if(reviewItem) direction = reviewItem.direction;
+        }
+
+        const existingIndex = appState.reviewList.findIndex(
+            item => item.wordIndex === wordIndex && item.direction === direction
+        );
+
+        if (existingIndex > -1) { // REMOVING word
+            appState.reviewList.splice(existingIndex, 1);
+            // Per user request, do NOT reset the review session when removing.
+        } else { // ADDING word
+            appState.reviewList.push({ wordIndex: wordIndex, direction: direction });
+            // Invalidate the current review session to force a refresh with the new word
+            if (appState.session.sessions.review) {
+                appState.session.sessions.review = null;
+            }
+        }
+        
+        saveState();
+        updateReviewButtonUI();
+    }
+
+    // --- Event Listeners & Initial Load ---
+    allDOMElements.showAnswerBtn.addEventListener('click', showAnswer);
+    allDOMElements.nextQuestionBtn.addEventListener('click', () => {
+        advanceToNextQuestion(appState.currentMode);
+        saveState();
+    });
+    allDOMElements.reviewBtn.addEventListener('click', toggleReviewStatus);
+    allDOMElements.restartBtn.addEventListener('click', () => buildNewRound(appState.currentMode));
+
+    allDOMElements.modeRadios.forEach(radio => {
+        radio.addEventListener('change', (event) => {
+            switchMode(event.target.value);
+        });
+    });
+
+    window.onload = () => {
+        if (loadState()) {
+            switchMode(appState.session.lastActiveMode);
+        } else {
+            switchMode('eng-to-jpn');
+        }
+    };
+</script>
+
+</body>
+</html>
